@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JMC Radio</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="home">
+  <div class="app">
+    <aside class="side" id="side"></aside>
+    <main class="main">
+      <div class="topbar"><b>JMC Radio</b><a class="btn" href="/player" style="padding:10px 22px">Listen now</a></div>
+
+      <section class="hero">
+        <div class="hero-in">
+          <h1>Campus voices, on demand.</h1>
+          <p>The official radio of JMC. Catch every episode from your college community, free and without signing in.</p>
+          <div class="go">
+            <a class="btn" href="/player">Start listening</a>
+            <span id="count" style="color:#d3e8da">Tuning in…</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="pad">
+        <h2>Latest episodes</h2>
+        <div id="grid" class="grid"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    (async () => {
+      const J = window.JMC, grid = document.getElementById('grid'), count = document.getElementById('count');
+      grid.innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+      try {
+        const r = await fetch('/api/episodes');
+        if (!r.ok) throw new Error(r.status);
+        const eps = (await r.json()).sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (!eps.length) {
+          grid.outerHTML = '<div class="state"><h3>No episodes yet</h3>New episodes will appear here as soon as they are published.</div>';
+          count.textContent = 'Off air for now';
+          return;
+        }
+        count.textContent = eps.length + (eps.length === 1 ? ' episode' : ' episodes') + ' available';
+        grid.innerHTML = eps.slice(0, 12).map(e => `
+          <a class="tile rv" href="/player?id=${encodeURIComponent(e.id)}">
+            <div class="cw">${J.cov(e.title)}<span class="fab"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span></div>
+            <h3>${J.esc(e.title)}</h3>
+            <p>${J.esc(J.day(e.date))}, ${J.esc(e.creator)}</p>
+          </a>`).join('');
+        J.reveal(grid);
+      } catch (err) {
+        grid.outerHTML = '<div class="state"><h3>Episodes did not load</h3>Check your connection and reload the page.</div>';
+        count.textContent = 'Signal lost';
+      }
+    })();
+  </script>
+</body>
+</html>

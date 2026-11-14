@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Staff sign-in – JMC Radio</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="login">
+  <main class="auth">
+    <form class="card" id="f">
+      <a class="brand" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="#258bff" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="2.2" fill="#1ed760"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/></svg>JMC Radio</a>
+      <div><h1>Staff sign-in</h1><p style="margin-top:8px">For creators who upload episodes. Students can listen without an account.</p></div>
+      <div class="fg"><label for="u">Username</label><input type="text" id="u" name="username" autocomplete="username" required></div>
+      <div class="fg"><label for="p">Password</label><input type="password" id="p" name="password" autocomplete="current-password" required></div>
+      <div class="msg" id="msg" role="alert"></div>
+      <button class="btn" id="go" type="submit">Sign in</button>
+      <a class="btn ghost" href="/player">Back to listening</a>
+    </form>
+  </main>
+
+  <script>
+    const f = document.getElementById('f'), msg = document.getElementById('msg'), go = document.getElementById('go');
+    f.onsubmit = async e => {
+      e.preventDefault();
+      msg.textContent = ''; go.disabled = true;
+      try {
+        const r = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: f.username.value.trim(), password: f.password.value })
+        });
+        if (r.ok) { location.href = '/admin'; return; }
+        let m = 'Incorrect username or password.';
+        try { m = (await r.json()).error || m; } catch (_) {}
+        msg.textContent = m;
+      } catch (err) {
+        msg.textContent = 'Could not reach the server. Try again.';
+      }
+      go.disabled = false;
+    };
+  </script>
+</body>
+</html>

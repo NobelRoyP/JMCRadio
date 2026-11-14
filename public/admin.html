@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Upload – JMC Radio</title>
+  <meta name="theme-color" content="#000000">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="admin">
+  <div class="app">
+    <aside class="side" id="side"></aside>
+    <main class="main">
+      <div class="topbar"><b>Upload an episode</b></div>
+      <div class="pad" style="margin-top:-24px">
+        <h1 style="font-size:clamp(2rem,5vw,3.2rem)">Upload an episode</h1>
+        <p style="color:var(--mut);margin:8px 0 28px">Episodes go live for every student as soon as the upload finishes.</p>
+
+        <form id="f" class="form" enctype="multipart/form-data">
+          <div class="fg"><label for="title">Title</label><input type="text" id="title" name="title" required></div>
+          <div class="fg"><label for="creator">Your name or show name</label><input type="text" id="creator" name="creator" required></div>
+          <div class="fg"><label for="date">Date</label><input type="date" id="date" name="date"></div>
+          <div class="fg full"><label for="description">Description (optional)</label><textarea id="description" name="description" rows="3"></textarea></div>
+          <div class="fg full">
+            <label class="drop" id="drop">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14v-2H5zM12 2l-6 6h4v6h4V8h4z"/></svg>
+              <strong id="fname">Drop an audio file here, or click to browse</strong>
+              <small>MP3, WAV or other audio, up to 100 MB</small>
+              <input type="file" id="audio" name="audio" accept="audio/*" required>
+            </label>
+          </div>
+          <div class="fg full">
+            <div class="meter" id="meter"><i></i></div>
+            <div><button class="btn" id="go" type="submit">Publish episode</button></div>
+          </div>
+        </form>
+
+        <h2>Published episodes</h2>
+        <div id="list"><div class="skel"></div><div class="skel"></div></div>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+
+  <script src="app.js"></script>
+  <script>
+  (() => {
+    const J = window.JMC, $ = s => document.querySelector(s);
+    const f = $('#f'), drop = $('#drop'), file = $('#audio'), meter = $('#meter'), list = $('#list'), toastEl = $('#toast');
+    const today = new Date().toISOString().slice(0, 10);
+    $('#date').value = today;
+    let tt;
+    const toast = (m, bad) => { toastEl.textContent = m; toastEl.className = 'toast show' + (bad ? ' bad' : ''); clearTimeout(tt); tt = setTimeout(() => toastEl.classList.remove('show'), 3500); };
+    const label = () => { const x = file.files[0]; $('#fname').textContent = x ? x.name + ' (' + (x.size / 1048576).toFixed(1) + ' MB)' : 'Drop an audio file here, or click to browse'; };
+    file.addEventListener('change', label);
+    ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) { file.files = e.dataTransfer.files; label(); } });
+
+    async function load() {
+      try {
+        const r = await J.json('/api/episodes');
+        const eps = (await r.json()).sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (!eps.length) { list.innerHTML = '<div class="state"><h3>Nothing published yet</h3>Your first upload will appear here.</div>'; return; }
+        list.innerHTML = eps.map(e => `
+          <div class="row adm rv">
+            ${J.cov(e.title)}
+            <div>
+              <h3>${J.esc(e.title)}</h3>
+              <div class="meta"><span>${J.esc(J.day(e.date))}</span><span>${J.esc(e.creator)}</span></div>
+              ${e.description ? '<p class="desc" style="margin-top:4px">' + J.esc(e.description) + '</p>' : ''}
+            </div>
+            <button class="del" type="button" data-id="${J.esc(e.id)}" data-t="${J.esc(e.title)}" aria-label="Delete ${J.esc(e.title)}"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"/></svg></button>
+          </div>`).join('');
+        J.reveal(list);
+      } catch (err) {
+        if (err.message !== 'auth') list.innerHTML = '<div class="state"><h3>Episodes did not load</h3>Reload the page to try again.</div>';
+      }
+    }
+
+    f.onsubmit = e => {
+      e.preventDefault();
+      const x = file.files[0];
+      if (!x) return toast('Choose an audio file first.', 1);
+      if (x.size > 100 * 1048576) return toast('That file is over 100 MB. Compress it and try again.', 1);
+      const btn = $('#go'), bar = meter.firstElementChild, xhr = new XMLHttpRequest();
+      btn.disabled = true; meter.style.display = 'block'; btn.textContent = 'Uploading…';
+      const done = () => { btn.disabled = false; btn.textContent = 'Publish episode'; meter.style.display = 'none'; bar.style.width = 0; };
+      xhr.open('POST', '/api/episodes/upload');
+      xhr.upload.onprogress = p => { if (p.lengthComputable) bar.style.width = (p.loaded / p.total * 100) + '%'; };
+      xhr.onload = () => {
+        done();
+        if (xhr.status === 401 || xhr.status === 403) { location.href = '/login'; return; }
+        if (xhr.status >= 200 && xhr.status < 300) { toast('Episode published.'); f.reset(); $('#date').value = today; label(); load(); return; }
+        let m = 'Upload failed. Try again.';
+        try { m = JSON.parse(xhr.responseText).error || m; } catch (_) {}
+        toast(m, 1);
+      };
+      xhr.onerror = () => { done(); toast('Upload failed. Check your connection and try again.', 1); };
+      xhr.send(new FormData(f));
+    };
+
+    list.addEventListener('click', async e => {
+      const b = e.target.closest('.del');
+      if (!b || !confirm('Delete “' + b.dataset.t + '”? This cannot be undone.')) return;
+      try {
+        const r = await J.json('/api/episodes/' + encodeURIComponent(b.dataset.id), { method: 'DELETE' });
+        if (r.ok) { toast('Episode deleted.'); load(); } else toast('Could not delete the episode.', 1);
+      } catch (err) { if (err.message !== 'auth') toast('Could not delete the episode.', 1); }
+    });
+
+    load();
+  })();
+  </script>
+</body>
+</html>
